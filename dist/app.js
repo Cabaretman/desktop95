@@ -17,3 +17,22 @@ for(const [id,[glyph,name,color]]of Object.entries(apps)){const icon=el('button'
 $('#start').onclick=()=>{desktopSound.play('menu');$('#start-menu').hidden=!$('#start-menu').hidden};document.addEventListener('pointerdown',e=>{if(!e.target.closest('#start-menu')&&!e.target.closest('#start'))$('#start-menu').hidden=true});document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#start-menu').hidden=true});function tick(){$('#clock').textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}tick();setInterval(tick,1000);if(settings.color)document.documentElement.style.setProperty('--desk',settings.color);
 
 $('#start .flag').replaceWith(pixelIcon('flag'));
+
+function selectDesktopIcon(selected) {
+  document.querySelectorAll('#icons .icon').forEach(icon => {
+    const active = icon === selected;
+    icon.classList.toggle('selected', active);
+    icon.setAttribute('aria-pressed', String(active));
+  });
+}
+$('#icons').addEventListener('click', event => {
+  const icon = event.target.closest('.icon');
+  if (icon) selectDesktopIcon(icon);
+});
+$('#icons').addEventListener('focusin', event => {
+  const icon = event.target.closest('.icon');
+  if (icon) selectDesktopIcon(icon);
+});
+$('#desktop').addEventListener('pointerdown', event => {
+  if (!event.target.closest('.icon, .window')) selectDesktopIcon(null);
+});

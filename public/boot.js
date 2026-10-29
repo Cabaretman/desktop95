@@ -10,4 +10,8 @@
     setTimeout(() => { screen.innerHTML = '<div class="boot-logo"><div class="boot-flag">▦</div><div>Microsoft<span>Windows <b>95</b></span></div><p>Starting your computer...</p><div class="boot-progress"></div></div>'; }, 1300);
     setTimeout(() => screen.remove(), 3300);
   });
+  if (sessionStorage.getItem('desktop95-reboot') === 'true') {
+    sessionStorage.removeItem('desktop95-reboot');
+    power.click();
+  }
 })();

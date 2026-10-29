@@ -80,7 +80,7 @@ const desktopSound = (() => {
     setTimeout(() => { booting = false; stopFan(); if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }, 3300);
   }
   function replay() { if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }
-  return { play, boot, replay, get ambience() { return ambience; }, setAmbience(value) {
+  return { play, boot, replay, silence() { stopFan(); startup.pause(); }, get ambience() { return ambience; }, setAmbience(value) {
     ambience = value;
     localStorage.setItem('desktop95-ambience', String(value));
     if (value) startFan(); else stopFan();

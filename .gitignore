@@ -3,3 +3,15 @@ node_modules/
 .env.*
 !.env.example
 *.tar.gz
+
+.sites-runtime/
+dist/
+.wrangler/
+.next/
+.openai/local*
+
+
+.vinext/
+*.tsbuildinfo
+.dev.vars
+.dev.vars.*

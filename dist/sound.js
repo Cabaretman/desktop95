@@ -2,7 +2,7 @@
 const desktopSound = (() => {
   let context;
   let fan;
-  let booted = false;
+  let booting = false;
   let ambience = localStorage.getItem('desktop95-ambience') !== 'false';
   const startup = new Audio('audio/startup.wav');
   startup.volume = .65;
@@ -36,7 +36,7 @@ const desktopSound = (() => {
     } catch { /* Audio support must not prevent desktop interactions. */ }
   }
   function startFan() {
-    if (fan || muted || !ambience || !booted) return;
+    if (fan || muted || !ambience || !booting) return;
     context ||= new (window.AudioContext || window.webkitAudioContext)();
     context.resume().catch(() => {});
     const buffer = context.createBuffer(1, context.sampleRate * 4, context.sampleRate);
@@ -73,11 +73,11 @@ const desktopSound = (() => {
     }
   }
   function boot() {
-    booted = true;
+    booting = true;
     play('menu');
     startFan();
     if (context) disk();
-    setTimeout(() => { if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }, 3300);
+    setTimeout(() => { booting = false; stopFan(); if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }, 3300);
   }
   function replay() { if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }
   return { play, boot, replay, get ambience() { return ambience; }, setAmbience(value) {

@@ -1,7 +1,7 @@
 (() => {
   const screen = document.createElement('div');
   screen.id = 'boot-screen';
-  screen.innerHTML = '<div class="power-prompt"><div class="power-symbol">◯</div><h1>Your computer is off.</h1><button id="power-on">Turn on computer</button><p>Power on to hear the startup sound and PC fan.</p></div>';
+  screen.innerHTML = '<div class="power-prompt"><div class="power-symbol">◯</div><h1>Your computer is off.</h1><button id="power-on">Turn on computer</button></div>';
   document.body.append(screen);
   const power = screen.querySelector('button');
   power.addEventListener('click', () => {

@@ -2,8 +2,8 @@ function readConversations(){try{const data=JSON.parse(localStorage.getItem('des
 appLaunchers.chat=()=>{
   const view=systemWindow('chat','AI Chat',620,420);if(!view)return;
   view.w.classList.add('saved-chat-window');let conversations=readConversations(),current=conversations[0]?.id,busy=false;
-  const body=el('div',{className:'chat-layout'}),sidebar=el('div',{className:'chat-sidebar'}),newButton=el('button',{},'New Conversation'),list=el('div',{className:'conversation-list'}),panel=el('div',{className:'chat-panel'}),log=el('div',{className:'chat-log',role:'log'}),tools=el('div',{className:'row'}),exportButton=el('button',{},'Export'),deleteButton=el('button',{},'Delete'),signIn=el('a',{href:'/signin-with-chatgpt?return_to=%2F',target:'_top'},'Sign in');
-  tools.append(exportButton,deleteButton,signIn);sidebar.append(newButton,list);const form=el('form',{className:'row'}),input=el('input',{ariaLabel:'Message',placeholder:'Type a message...',required:true}),send=el('button',{type:'submit'},'Send');form.append(input,send);panel.append(tools,log,form);body.append(sidebar,panel);view.content.append(body);
+  const body=el('div',{className:'chat-layout'}),sidebar=el('div',{className:'chat-sidebar'}),newButton=el('button',{},'New Conversation'),list=el('div',{className:'conversation-list'}),panel=el('div',{className:'chat-panel'}),log=el('div',{className:'chat-log',role:'log'}),tools=el('div',{className:'row'}),exportButton=el('button',{},'Export'),deleteButton=el('button',{},'Delete'),configure=el('button',{},'Connection...');
+  configure.onclick=()=>open('settings');tools.append(exportButton,deleteButton,configure);sidebar.append(newButton,list);const form=el('form',{className:'row'}),input=el('input',{ariaLabel:'Message',placeholder:'Type a message...',required:true}),send=el('button',{type:'submit'},'Send');form.append(input,send);panel.append(tools,log,form);body.append(sidebar,panel);view.content.append(body);
   const persist=()=>localStorage.setItem('desktop95-conversations',JSON.stringify(conversations));
   const conversation=()=>conversations.find(c=>c.id===current);
   function newConversation(){const item={id:crypto.randomUUID(),title:'New conversation',messages:[],updated:Date.now()};conversations.unshift(item);current=item.id;persist();render();input.focus();}
@@ -16,14 +16,14 @@ appLaunchers.chat=()=>{
   deleteButton.onclick=async()=>{const item=conversation();if(!item||busy)return;if(await systemDialog('Delete Conversation','Delete this saved conversation?',{cancel:true,ok:'Delete'})){conversations=conversations.filter(c=>c.id!==item.id);current=conversations[0]?.id;persist();if(!current)newConversation();else render();}};
   const requestController=new AbortController();view.signal.addEventListener('abort',()=>requestController.abort());
   form.onsubmit=async event=>{
-    event.preventDefault();if(busy)return;const text=input.value.trim();if(!text)return;if(text.length>8000){errorMessage('Please keep each message under 8,000 characters.');return;}if(!conversation())newConversation();
+    event.preventDefault();if(busy)return;const text=input.value.trim();if(!text)return;if(text.length>8000){errorMessage('Please keep each message under 8,000 characters.');return;}try{aiConnection.validate()}catch(error){errorMessage(error.message);open('settings');return;}if(!conversation())newConversation();
     const item=conversation();item.messages.push({role:'user',content:text});if(item.messages.length===1)item.title=text.slice(0,35);item.updated=Date.now();persist();input.value='';busy=true;send.disabled=true;render();view.status.textContent='Connecting...';
-    try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:item.messages.slice(-80)}),signal:AbortSignal.any([requestController.signal,AbortSignal.timeout(60000)])});const data=await response.json();if(!response.ok)throw Error(data.error||'The AI connection failed.');item.messages.push({role:'assistant',content:data.content});persist();desktopSound.play('notification');view.status.textContent='Ready';}
+    try{const content=await aiConnection.send(item.messages.slice(-80),AbortSignal.any([requestController.signal,AbortSignal.timeout(60000)]));item.messages.push({role:'assistant',content});persist();desktopSound.play('notification');view.status.textContent='Ready';}
     catch(error){if(view.signal.aborted)return;errorMessage(error.message);desktopSound.play('error');view.status.textContent=error.message;}
     finally{busy=false;send.disabled=false;if(!view.signal.aborted){const error=view.status.textContent;render();if(error!=='Ready')errorMessage(error);input.focus();}}
   };
   if(!current)newConversation();else render();
-  fetch('/api/chat',{signal:view.signal}).then(async response=>{const data=await response.json();signIn.hidden=response.status!==401;view.status.textContent=response.ok?(data.configured?'Secure connection ready':'AI provider not configured on the server'):data.error||'Sign in to use AI Chat';}).catch(()=>{view.status.textContent='Server connection unavailable'});
+  view.status.textContent='Bring your own API key · No sign-in required';
 };
 
 const settingsOpen=open;
@@ -34,7 +34,15 @@ open=function(id){
     if(content&&!content.dataset.secure){
       content.dataset.secure='true';let remove=false;
       for(const node of [...content.children]){if(node.tagName==='H3'&&node.textContent==='AI connection')remove=true;if(remove)node.remove();}
-      content.append(el('h3',{},'AI connection'),el('p',{},'AI Chat uses a server-side secret. Only your signed-in account can use the connection. Your API key is never stored in the page.'));
+      content.append(el('h3',{},'AI connection'),el('p',{},'Messages and your key go directly to the provider endpoint below. The provider must allow browser requests. Your key stays in memory until you refresh or clear it.'));
+      let keyInput;
+      for(const [label,prop,placeholder] of [['Endpoint URL','endpoint','https://api.openai.com/v1/chat/completions'],['Model','model','Provider model ID'],['API key','key','Enter your API key for this session']]){
+        const row=el('label',{},label),input=el('input',{type:prop==='key'?'password':prop==='endpoint'?'url':'text',placeholder,autocomplete:'off',spellcheck:false});
+        if(prop==='key'){keyInput=input;input.placeholder=aiConnection.hasKey?'Key is set for this session':'Enter your API key for this session';input.oninput=()=>aiConnection.setKey(input.value);}
+        else{input.value=settings[prop]|| (prop==='endpoint'?'https://api.openai.com/v1/chat/completions':'');input.oninput=()=>{if(prop==='endpoint'){aiConnection.clear();keyInput.value='';keyInput.placeholder='Enter your API key for this session';}settings[prop]=input.value;saveSettings();};}
+        row.append(input);content.append(row);
+      }
+      const clear=el('button',{},'Clear API key');clear.onclick=()=>{aiConnection.clear();keyInput.value='';keyInput.placeholder='Enter your API key for this session';};content.append(clear);
     }
   }
   return result;

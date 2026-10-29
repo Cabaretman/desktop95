@@ -44,21 +44,20 @@ same virtual files as Explorer. Desktop icon positions are saved locally.
 ## AI chat
 
 AI Chat saves conversations in this browser and supports new threads,
-export, and deletion. Requests go through `/api/chat`; API credentials are
-never accepted from or returned to the browser.
+export, and deletion. No sign-in is required. Choose Connection in AI Chat
+or open Settings and enter a provider endpoint, model ID, and API key.
 
-Configure `AI_API_KEY` and `AI_MODEL` using Sites runtime secrets. Optional
-`AI_ENDPOINT` defaults to the OpenAI chat-completions endpoint. Set
-`OWNER_EMAIL` to the authorized account; the server defaults to this
-project's owner. The endpoint checks Sites-provided identity on every
-request and rejects anonymous visitors, other accounts, and cross-origin
-POSTs. Public access to the desktop does not grant access to the AI key.
+Requests go directly from the browser to the chosen HTTPS provider. The
+provider must support the chat-completions format and allow browser
+requests (CORS). API usage is charged to the user's provider account.
 
-`.env.example` lists configuration names only. Keep actual credentials out
-of source control, browser assets, and `.openai/hosting.json`. Live provider
-calls require the server secret and a model; otherwise chat reports that
-configuration is missing. For OpenAI key provisioning through Codex, enable
-the OpenAI Developers plugin and use its API-key workflow.
+The key is held only in page memory, not local storage, cookies, server
+secrets, source files, or conversation exports. Refreshing the page or
+choosing Clear API key removes it. Changing the endpoint also clears the
+key, so it cannot accidentally be reused for a different provider.
+Endpoint and model preferences are saved locally. Browser scripts and
+extensions with access to the page may still access a session key; this
+is a user-supplied browser credential, not a server-side secret.
 
 ## Assets
 

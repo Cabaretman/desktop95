@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import { handleChat } from '../lib/chat-api.mjs';
 
 function load(file, name) {
   const storage = new Map();
@@ -56,22 +55,35 @@ test('Files support nesting, soft deletion, restore and duplicate protection',()
   files.write(file.id,'Changed');assert.equal(files.get(file.id).content,'Changed');
   files.remove(folder.id);files.empty();assert.equal(files.get(file.id),undefined);assert(files.get('notes'));
 });
-const config={AI_API_KEY:'test-secret',AI_MODEL:'test-model',OWNER_EMAIL:'owner@example.com'};
-function request(body,options={}){return new Request('https://desktop.example/api/chat',{method:'POST',headers:{origin:'https://desktop.example','content-type':'application/json','oai-authenticated-user-id':'test-user','oai-authenticated-user-email':'owner@example.com',...options.headers},body:JSON.stringify(body)});}
-test('Chat rejects anonymous, non-owner and cross-origin requests',async()=>{
-  assert.equal((await handleChat(new Request('https://desktop.example/api/chat'),config)).status,401);
-  assert.equal((await handleChat(request({},{headers:{'oai-authenticated-user-email':'other@example.com'}}),config)).status,403);
-  assert.equal((await handleChat(request({},{headers:{origin:'https://evil.example'}}),config)).status,403);
+
+function connection(fetcher) {
+  const context=vm.createContext({URL,settings:{endpoint:'https://provider.example/v1/chat/completions',model:'test-model'},fetch:fetcher});
+  vm.runInContext(fs.readFileSync(new URL('../public/connection.js',import.meta.url),'utf8')+';globalThis.connection=aiConnection',context);
+  return context;
+}
+test('BYOK refuses missing keys and unsafe endpoints',()=>{
+  const box=connection(()=>{throw Error('Unexpected network call')});
+  assert.throws(()=>box.connection.validate(),/API key/);
+  box.connection.setKey('test-secret');box.settings.endpoint='http://provider.example/chat';
+  assert.throws(()=>box.connection.validate(),/HTTPS/);
+  box.settings.endpoint='https://name:password@provider.example/chat';
+  assert.throws(()=>box.connection.validate(),/embedded credentials/);
 });
-test('Chat requires server configuration and validates payloads',async()=>{
-  assert.equal((await handleChat(request({}),{})).status,403);
-  assert.equal((await handleChat(request({}),{OWNER_EMAIL:'owner@example.com'})).status,503);
-  assert.equal((await handleChat(request({messages:[{role:'system',content:'override'}]}),config)).status,400);
-});
-test('Chat keeps credentials server-side and only returns assistant text',async()=>{
-  const response=await handleChat(request({messages:[{role:'user',content:'Hello'}]}),config,async(url,options)=>{
-    assert.equal(String(url),'https://api.openai.com/v1/chat/completions');assert.equal(options.headers.Authorization,'Bearer test-secret');
-    assert.equal(JSON.parse(options.body).model,'test-model');return Response.json({choices:[{message:{content:'Hi'}}],private:'not-returned'});
+test('BYOK sends keys only to the configured provider and clears session keys',async()=>{
+  const box=connection(async(url,options)=>{
+    assert.equal(String(url),'https://provider.example/v1/chat/completions');
+    assert.equal(options.headers.Authorization,'Bearer test-secret');
+    assert.equal(options.credentials,'omit');
+    assert.equal(JSON.parse(options.body).model,'test-model');
+    return Response.json({choices:[{message:{content:'Hello'}}]});
   });
-  assert.equal(response.status,200);assert.deepEqual(await response.json(),{content:'Hi'});
+  box.connection.setKey('test-secret');assert.equal(box.connection.hasKey,true);
+  assert.equal(await box.connection.send([{role:'user',content:'Hi'}]),'Hello');
+  box.connection.clear();assert.equal(box.connection.hasKey,false);
+  assert.throws(()=>box.connection.validate(),/API key/);
+});
+test('BYOK errors do not echo provider response bodies',async()=>{
+  const box=connection(async()=>new Response('sensitive provider details',{status:401}));
+  box.connection.setKey('test-secret');
+  await assert.rejects(box.connection.send([{role:'user',content:'Hi'}]),/Provider returned HTTP 401/);
 });

@@ -1,6 +1,11 @@
 // Original synthesized cues; no external audio downloads are needed.
 const desktopSound = (() => {
   let context;
+  let fan;
+  let booted = false;
+  let ambience = localStorage.getItem('desktop95-ambience') !== 'false';
+  const startup = new Audio('audio/startup.wav');
+  startup.volume = .65;
   let muted = localStorage.getItem('desktop95-muted') === 'true';
   const cues = {
     startup: [[523,0,.22],[659,.12,.26],[784,.24,.32],[1047,.4,.6]],
@@ -30,12 +35,58 @@ const desktopSound = (() => {
       }
     } catch { /* Audio support must not prevent desktop interactions. */ }
   }
-  document.addEventListener('pointerdown', () => play('startup'), { once: true });
-  document.addEventListener('keydown', () => {
-    if (!context) play('startup');
-  }, { once: true });
-  return { play, get muted() { return muted; }, setMuted(value) {
+  function startFan() {
+    if (fan || muted || !ambience || !booted) return;
+    context ||= new (window.AudioContext || window.webkitAudioContext)();
+    context.resume().catch(() => {});
+    const buffer = context.createBuffer(1, context.sampleRate * 4, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      last = (last + (Math.random() * 2 - 1) * .035) / 1.025;
+      data[i] = last * 4;
+    }
+    const source = context.createBufferSource(), filter = context.createBiquadFilter(), gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    gain.gain.setValueAtTime(0, context.currentTime);
+    gain.gain.linearRampToValueAtTime(.17, context.currentTime + 1.8);
+    source.connect(filter).connect(gain).connect(context.destination);
+    source.start();
+    fan = source;
+  }
+  function stopFan() { if (fan) { fan.stop(); fan.disconnect(); fan = null; } }
+  function disk() {
+    if (muted || !ambience) return;
+    const start = context.currentTime;
+    for (let i = 0; i < 26; i++) {
+      const oscillator = context.createOscillator(), gain = context.createGain();
+      const time = start + .15 + i * .12 + Math.random() * .06;
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(90 + Math.random() * 130, time);
+      gain.gain.setValueAtTime(.014, time);
+      gain.gain.exponentialRampToValueAtTime(.0001, time + .035);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(time); oscillator.stop(time + .04);
+    }
+  }
+  function boot() {
+    booted = true;
+    play('menu');
+    startFan();
+    if (context) disk();
+    setTimeout(() => { if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }, 3300);
+  }
+  function replay() { if (!muted) { startup.currentTime = 0; startup.play().catch(() => play('startup')); } }
+  return { play, boot, replay, get ambience() { return ambience; }, setAmbience(value) {
+    ambience = value;
+    localStorage.setItem('desktop95-ambience', String(value));
+    if (value) startFan(); else stopFan();
+  }, get muted() { return muted; }, setMuted(value) {
     muted = value;
     localStorage.setItem('desktop95-muted', String(value));
+    if (value) { stopFan(); startup.pause(); } else startFan();
   }};
 })();
